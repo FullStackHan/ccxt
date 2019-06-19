@@ -52,7 +52,9 @@ class stronghold (Exchange):
                 'createDepositAddress': True,
                 'withdraw': True,
                 'fetchTicker': False,
+                'fetchTickers': False,
                 'fetchAccounts': True,
+                'fetchTransactions': True,
             },
             'api': {
                 'public': {
@@ -119,6 +121,7 @@ class stronghold (Exchange):
                     'XLM': 'stellar',
                     'XRP': 'ripple',
                     'LTC': 'litecoin',
+                    'SHX': 'stellar',
                 },
             },
             'exceptions': {
@@ -194,8 +197,8 @@ class stronghold (Exchange):
         for i in range(0, len(data)):
             entry = data[i]
             marketId = entry['id']
-            baseId = entry['baseAssetId']
-            quoteId = entry['counterAssetId']
+            baseId = self.safe_string(entry, 'baseAssetId')
+            quoteId = self.safe_string(entry, 'counterAssetId')
             baseAssetId = baseId.split('/')[0]
             quoteAssetId = quoteId.split('/')[0]
             base = self.common_currency_code(baseAssetId)
@@ -415,6 +418,7 @@ class stronghold (Exchange):
     def parse_transaction_status(self, status):
         statuses = {
             'queued': 'pending',
+            'settling': 'pending',
         }
         return self.safe_string(statuses, status, status)
 
@@ -450,7 +454,10 @@ class stronghold (Exchange):
         if feeCost is not None:
             feeRate = feeCost / amount
         direction = self.safe_string(transaction, 'direction')
-        type = 'withdraw' if (direction == 'outgoing') else 'deposit'
+        datetime = self.safe_string(transaction, 'requestedAt')
+        timestamp = self.parse8601(datetime)
+        updated = self.parse8601(self.safe_string(transaction, 'updatedAt'))
+        type = 'withdrawal' if (direction == 'outgoing' or direction == 'withdrawal') else 'deposit'
         fee = {
             'cost': feeCost,
             'rate': feeRate,
@@ -464,11 +471,11 @@ class stronghold (Exchange):
             'fee': fee,
             'tag': None,
             'type': type,
-            'updated': None,
+            'updated': updated,
             'address': None,
             'txid': None,
-            'timestamp': None,
-            'datetime': None,
+            'timestamp': timestamp,
+            'datetime': datetime,
         }
 
     def create_order(self, symbol, type, side, amount, price=None, params={}):
